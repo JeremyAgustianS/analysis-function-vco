@@ -1,0 +1,25 @@
+{
+  "slug": "analysis_function_vco",
+  "name": "analysis_function_vco",
+  "version": "2.0.0",
+  "license": "MIT",
+  "brand": "JER",
+  "author": "JeremyAgustianS",
+  "authorEmail": "jeremy.agustians@gmail.com",
+  "authorUrl": "",
+  "pluginUrl": "",
+  "manualUrl": "",
+  "sourceUrl": "",
+  "donateUrl": "",
+  "changelogUrl": "",
+  "modules": [
+    {
+      "slug": "VCO",
+      "name": "Analysis_VCO",
+      "description": "math",
+      "tags": [
+        "math"
+      ]
+    }
+  ]
+}
