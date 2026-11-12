@@ -38,6 +38,8 @@ struct VCO : Module {
 	};
 	enum LightId {
 		FREQ_LIGHT,
+		LFM_LIGHT,
+		SOFT_LIGHT,
 		LIGHTS_LEN
 	};
 
@@ -48,28 +50,24 @@ struct VCO : Module {
 	std::vector<float> zeta_waves = {0};
 	int zetaIndex = 0;
 	bool recomputePressed = false; //for button press guard
-	bool lfmOn = false;
-	bool lfmPressed = false; // LFM LEDButton → latched toggle
-	bool softOn = false;
-	bool softPressed = false; // SOFT LEDButton → latched toggle
 	dsp::SchmittTrigger syncTrigger;
 
 	VCO() {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
 		// Linear Hz knob (rotation ∝ frequency)
 		configParam(FREQ_PARAM, 10.f, 20000.f, dsp::FREQ_C4, "Freq", " Hz");
-		configParam(SPEED_PARAM, 0.f, 1.f, 0.f, "");
-		configParam(TYPE_PARAM, 0.f, 1.f, 0.f, "");
-		configParam(RECOMPUTE_PARAM, 0.f, 1.f, 0.f, "");
-		configParam(FMCV_PARAM, 0.f, 1.f, 0.f, "");
-		configParam(LFM_PARAM, 0.f, 1.f, 0.f, "");
-		configParam(SOFT_PARAM, 0.f, 1.f, 0.f, "");
-		configInput(SYNC_INPUT, "");
-		configInput(FM_INPUT, "");
-		configInput(PITCH_INPUT, "");
-		configOutput(WEIERSTRASS_OUTPUT, "");
-		configOutput(FUNNYFUNCTION_OUTPUT, "");
-		configOutput(RIEMANNZETA_OUTPUT, "");
+		configParam(SPEED_PARAM, 0.f, 1.f, 0.f, "Speed");
+		configSwitch(TYPE_PARAM, 0.f, 1.f, 0.f, "Zeta mode", {"Arg(Z)", "Re(Z)"});
+		configButton(RECOMPUTE_PARAM, "Recalculate");
+		configParam(FMCV_PARAM, 0.f, 1.f, 0.f, "FM CV");
+		configButton(LFM_PARAM, "Linear FM");
+		configButton(SOFT_PARAM, "Soft sync");
+		configInput(SYNC_INPUT, "Sync");
+		configInput(FM_INPUT, "FM");
+		configInput(PITCH_INPUT, "V/Oct");
+		configOutput(WEIERSTRASS_OUTPUT, "Weierstrass");
+		configOutput(FUNNYFUNCTION_OUTPUT, "Funny");
+		configOutput(RIEMANNZETA_OUTPUT, "Riemann zeta");
 	}
 
 	void process(const ProcessArgs& args) override {
@@ -80,17 +78,9 @@ struct VCO : Module {
 			compute(args.sampleRate);
 		recomputePressed = pressed;
 
-		// LFM: momentary LEDButton → latched on/off (lfm BUTTON)
-		bool lfmBtn = params[LFM_PARAM].getValue() > 0.f;
-		if (lfmBtn && !lfmPressed)
-			lfmOn = !lfmOn;
-		lfmPressed = lfmBtn;
-
-		// SOFT: momentary LEDButton → latched hard/soft sync
-		bool softBtn = params[SOFT_PARAM].getValue() > 0.f;
-		if (softBtn && !softPressed)
-			softOn = !softOn;
-		softPressed = softBtn;
+		// LFM / SOFT: VCVLightLatch params stay 0/1 (true toggle buttons)
+		bool lfmOn = params[LFM_PARAM].getValue() > 0.f;
+		bool softOn = params[SOFT_PARAM].getValue() > 0.f;
 
 		// FREQ knob is already Hz (linear). V/oct still multiplies in octaves.
 		float freq = params[FREQ_PARAM].getValue();
@@ -142,6 +132,13 @@ struct VCO : Module {
 			if (zetaIndex >= (int)zeta_waves.size())
 				zetaIndex = 0;
 		}
+
+		// LED: blink FREQ-knob Hz times per second (knob only, ignore CV/FM/sync)
+		float blinkHz = params[FREQ_PARAM].getValue();
+		blinkPhase += blinkHz * args.sampleTime;
+		if (blinkPhase >= 1.f)
+			blinkPhase -= 1.f;
+		lights[FREQ_LIGHT].setBrightness(blinkPhase < 0.5f ? 1.f : 0.f);
 	}
 
 	float weierstrass(float phase){
@@ -281,8 +278,8 @@ struct VCOWidget : ModuleWidget {
 		addParam(createParamCentered<CKSS>(mm2px(Vec(34.873, 72.475)), module, VCO::TYPE_PARAM));
 		addParam(createParamCentered<LEDButton>(mm2px(Vec(7.992, 81.641)), module, VCO::RECOMPUTE_PARAM));
 		addParam(createParamCentered<Trimpot>(mm2px(Vec(7.97, 98.393)), module, VCO::FMCV_PARAM));
-		addParam(createParamCentered<LEDButton>(mm2px(Vec(18.808, 98.393)), module, VCO::LFM_PARAM));
-		addParam(createParamCentered<LEDButton>(mm2px(Vec(36.518, 98.394)), module, VCO::SOFT_PARAM));
+		addParam(createLightParamCentered<VCVLightLatch<MediumSimpleLight<WhiteLight>>>(mm2px(Vec(18.808, 98.393)), module, VCO::LFM_PARAM, VCO::LFM_LIGHT));
+		addParam(createLightParamCentered<VCVLightLatch<MediumSimpleLight<WhiteLight>>>(mm2px(Vec(36.518, 98.394)), module, VCO::SOFT_PARAM, VCO::SOFT_LIGHT));
 
 		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(27.978, 98.39)), module, VCO::SYNC_INPUT));
 		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(7.97, 113.193)), module, VCO::FM_INPUT));
