@@ -55,6 +55,10 @@ struct VCO : Module {
 	float phase = 0.f;
 	float blinkPhase = 0.f;
 
+	std::vector<float> zeta_waves = {0};
+	int zetaIndex = 0;
+	bool recomputePressed = false; //for button press guard
+
 	VCO() {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
 		configParam<FreqParamQuantity>(FREQ_PARAM, -8.f, 6.f, 0.f, "Freq", " Hz");
@@ -73,8 +77,15 @@ struct VCO : Module {
 	}
 
 	void process(const ProcessArgs& args) override {
-		//get params 
+		
+		// For recompute safeguarding
+		bool pressed = params[RECOMPUTE_PARAM].getValue() > 0.f;
+		if (pressed && !recomputePressed)
+			compute(args.sampleRate);
+		recomputePressed = pressed;
 
+
+		//get params 
 		float pitch = params[FREQ_PARAM].getValue();
 		pitch += inputs[PITCH_INPUT].getVoltage();
 		//no FMCV and LFM yet...
@@ -84,7 +95,8 @@ struct VCO : Module {
 		// PHASE
 		phase += freq * args.sampleTime;
 		if (phase >= 1.f){phase -= 1.f;}
-	
+		
+		
 
 		// OUTPUTS:
 		// Weierstrass
@@ -99,8 +111,13 @@ struct VCO : Module {
 		}
 		//zeta
 		if (outputs[RIEMANNZETA_OUTPUT].isConnected()){
-			float z = 0.5f;
+			
+			float z = zeta_waves[zetaIndex];
 			outputs[RIEMANNZETA_OUTPUT].setVoltage(5.f * z);
+
+			zetaIndex++;
+			if (zetaIndex >= (int)zeta_waves.size())
+				zetaIndex = 0;
 		}
 	}
 
@@ -149,6 +166,67 @@ struct VCO : Module {
 	std::complex<double> riemann_zeta(std::complex<double> z){
 		return eta(z) / (1.0 - std::pow(2.0, 1.0 - z));
 	}
+	//helper functions for the modes:
+
+	// MODE 0: Arg(Z). basically peaks at pi/2 and -pi/2
+	float fold_arg(float x) {  // x in (-pi, pi]
+		if (x > M_PI/2.f || x < -M_PI/2.f)
+			return (M_PI - std::fabs(x)) * (x >= 0.f ? 1.f : -1.f) / (M_PI/2);
+		return x / (M_PI/2);
+	}
+	// MODE 1: Re(Z).
+	float fold_real(float x){
+		//stub
+		return 0.0f;
+	}
+	// Squeeze range
+	void process_range(std::vector<float> &audio_data, float amp = 1.f){
+		if (audio_data.empty())
+			return;
+
+		float max_val = 0.f;
+		for (float num : audio_data) {
+			if (num > max_val)
+				max_val = num;
+			if (-num > max_val)
+				max_val = -num;
+		}
+
+		// division by 0:
+		if (max_val == 0.f)
+			return;
+
+		for (float& num : audio_data)
+			num = num * amp / max_val;
+	}
+
+	//compute to populate the vector of waves
+	void compute(float sampleRate){
+		// initialize all 0 first as fallback
+		int n = (int)(5.f * sampleRate);
+		if ((int)zeta_waves.size() != n)
+			zeta_waves.assign(n, 0.f);
+
+		// Time to recompute...
+		//GET SPEED, GET MODE - speed setting can be 1 to 50 (x units up per second)
+		float speed = params[SPEED_PARAM].getValue();
+		int mode = (int)std::lround(params[TYPE_PARAM].getValue());
+		//mode 0 is arg(z), mode 1 is re(z)
+		//TIME TO DO THE CALCULATION
+		if (mode == 0) {
+			for (int i = 0; i < (int)zeta_waves.size(); ++i) {
+				float t = (1.f + pow(2, 10.f * speed)) * (i / (float)sampleRate);
+				std::complex<double> z = riemann_zeta(std::complex<double>(0.5, t));
+				float a = fold_arg((float)std::arg(z));
+				zeta_waves[i] = a;
+			}
+			process_range(zeta_waves, 1.f);
+		} else {
+			// TODO: Re(z) mode
+		}
+		zetaIndex = 0;
+	}
+
 
 };
 

@@ -39,9 +39,9 @@
      inkscape:window-height="1494"
      id="namedview216"
      showgrid="false"
-     inkscape:zoom="7.0264084"
-     inkscape:cx="180.5332"
-     inkscape:cy="312.17941"
+     inkscape:zoom="2.4842105"
+     inkscape:cx="53.336865"
+     inkscape:cy="132.23517"
      inkscape:window-x="-11"
      inkscape:window-y="-11"
      inkscape:window-maximized="1"
@@ -70,7 +70,7 @@
   <g
      transform="matrix(0.28412446,-0.07739836,0.07739836,0.28412446,-160.35724,-101.06847)"
      id="g2"
-     style="display:inline;opacity:0.5">
+     style="display:inline;opacity:1">
     <image
        x="95.869942"
        y="240.00639"
@@ -81,7 +81,7 @@
        id="image2" />
   </g>
   <rect
-     style="opacity:0.743;fill:#b3b3b3"
+     style="opacity:0.71;fill:#b3b3b3"
      id="rect1"
      width="136.2606"
      height="380.40259"
