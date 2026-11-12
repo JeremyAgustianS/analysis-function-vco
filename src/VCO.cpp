@@ -176,7 +176,7 @@ struct VCO : Module {
 	}
 	// MODE 1: Re(Z).
 	float fold_real(float x){
-		//stub
+		//might be used for any logic changes
 		return 0.0f;
 	}
 	// Squeeze range
@@ -208,12 +208,12 @@ struct VCO : Module {
 			zeta_waves.assign(n, 0.f);
 
 		// Time to recompute...
-		//GET SPEED, GET MODE - speed setting can be 1 to 50 (x units up per second)
+		//GET SPEED, GET MODE - speed is specific to mode
 		float speed = params[SPEED_PARAM].getValue();
 		int mode = (int)std::lround(params[TYPE_PARAM].getValue());
 		//mode 0 is arg(z), mode 1 is re(z)
 		//TIME TO DO THE CALCULATION
-		if (mode == 0) {
+		if (mode == 0) { // arg(z)
 			for (int i = 0; i < (int)zeta_waves.size(); ++i) {
 				float t = (1.f + pow(2, 10.f * speed)) * (i / (float)sampleRate);
 				std::complex<double> z = riemann_zeta(std::complex<double>(0.5, t));
@@ -221,8 +221,20 @@ struct VCO : Module {
 				zeta_waves[i] = a;
 			}
 			process_range(zeta_waves, 1.f);
-		} else {
-			// TODO: Re(z) mode
+		} else {	//re(z), needs innately faster speed cuz it moves "slower"
+			for (int i = 0; i < (int)zeta_waves.size(); ++i) {
+				float t = (50.f * speed + pow(2, 10.f * speed)) * (i / (float)sampleRate);
+				std::complex<double> z = riemann_zeta(std::complex<double>(0.5, t));
+				float a = (float)std::real(z);
+				zeta_waves[i] = a;
+			}
+			process_range(zeta_waves, 1.f);
+
+			//magic number processing
+			for (int i = 0; i < (int)zeta_waves.size(); ++i) {
+				zeta_waves[i] -= 0.1;
+				if(zeta_waves[i] < -1){zeta_waves[i] = -1;}
+			}
 		}
 		zetaIndex = 0;
 	}
