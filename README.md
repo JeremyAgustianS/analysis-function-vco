@@ -30,7 +30,7 @@ Speed mapping is intentionally non-linear (more range at the top of the slider).
 
 ## Build
 
-Standard VCV Rack plugin build (`make` against your Rack SDK). Brand slug: `analysis_function_vco`.
+Standard VCV Rack plugin build (`make` against your Rack SDK).  
 
 
 ## Suggestions/Issues
@@ -40,6 +40,6 @@ Please put it up on issues page tyy!!
 
 
 -----
-Mathematical Analysis propaganda OwO
-Notes:
+Mathematical Analysis propaganda OwO  
+Notes:  
 For the Weierstrass function, the magic numbers are `a = 0.5`, `b = 7`, period scale `0.571` (geogebra-tested)
