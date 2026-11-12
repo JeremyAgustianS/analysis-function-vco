@@ -13,16 +13,6 @@
 
 
 
-//Display hz on the panel
-struct FreqParamQuantity : ParamQuantity {
-	float getDisplayValue() override {
-		return dsp::FREQ_C4 * std::pow(2.f, getValue());
-	}
-	void setDisplayValue(float v) override {
-		setValue(std::log2(v / dsp::FREQ_C4));
-	}
-};
-
 struct VCO : Module {
 	enum ParamId {
 		FREQ_PARAM,
@@ -58,10 +48,16 @@ struct VCO : Module {
 	std::vector<float> zeta_waves = {0};
 	int zetaIndex = 0;
 	bool recomputePressed = false; //for button press guard
+	bool lfmOn = false;
+	bool lfmPressed = false; // LFM LEDButton → latched toggle
+	bool softOn = false;
+	bool softPressed = false; // SOFT LEDButton → latched toggle
+	dsp::SchmittTrigger syncTrigger;
 
 	VCO() {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
-		configParam<FreqParamQuantity>(FREQ_PARAM, -8.f, 6.f, 0.f, "Freq", " Hz");
+		// Linear Hz knob (rotation ∝ frequency)
+		configParam(FREQ_PARAM, 10.f, 20000.f, dsp::FREQ_C4, "Freq", " Hz");
 		configParam(SPEED_PARAM, 0.f, 1.f, 0.f, "");
 		configParam(TYPE_PARAM, 0.f, 1.f, 0.f, "");
 		configParam(RECOMPUTE_PARAM, 0.f, 1.f, 0.f, "");
@@ -78,25 +74,52 @@ struct VCO : Module {
 
 	void process(const ProcessArgs& args) override {
 		
-		// For recompute safeguarding
+		// for recompute safeguarding
 		bool pressed = params[RECOMPUTE_PARAM].getValue() > 0.f;
 		if (pressed && !recomputePressed)
 			compute(args.sampleRate);
 		recomputePressed = pressed;
 
+		// LFM: momentary LEDButton → latched on/off (lfm BUTTON)
+		bool lfmBtn = params[LFM_PARAM].getValue() > 0.f;
+		if (lfmBtn && !lfmPressed)
+			lfmOn = !lfmOn;
+		lfmPressed = lfmBtn;
 
-		//get params 
-		float pitch = params[FREQ_PARAM].getValue();
-		pitch += inputs[PITCH_INPUT].getVoltage();
-		//no FMCV and LFM yet...
+		// SOFT: momentary LEDButton → latched hard/soft sync
+		bool softBtn = params[SOFT_PARAM].getValue() > 0.f;
+		if (softBtn && !softPressed)
+			softOn = !softOn;
+		softPressed = softBtn;
 
+		// FREQ knob is already Hz (linear). V/oct still multiplies in octaves.
+		float freq = params[FREQ_PARAM].getValue();
+		float pitchCv = inputs[PITCH_INPUT].getVoltage();
+		float fm = inputs[FM_INPUT].getVoltage() * params[FMCV_PARAM].getValue();
 
-		float freq = dsp::FREQ_C4 * std::pow(2.f, pitch);  // Hz
+		if (!lfmOn) {
+			// expo FM: same space as V/oct (volts → octaves)
+			freq *= std::pow(2.f, pitchCv + fm);
+		} else {
+			// linear FM: Hz offset (1V @ full FMCV → +C4 Hz)
+			freq *= std::pow(2.f, pitchCv);
+			freq += fm * dsp::FREQ_C4;
+		}
+		if (freq < 0.f)
+			freq = 0.f;
+
 		// PHASE
 		phase += freq * args.sampleTime;
 		if (phase >= 1.f){phase -= 1.f;}
-		
-		
+
+		// SYNC: Schmitt rising edge → reset phase (Weierstrass / Funny only)
+		// thresholds tolerate typical 0–10 V gates/squares (old ≤0→>0 missed many)
+		if (inputs[SYNC_INPUT].isConnected()) {
+			if (syncTrigger.process(inputs[SYNC_INPUT].getVoltage(), 0.1f, 1.f)) {
+				if (!softOn || phase >= 0.5f)
+					phase = 0.f;
+			}
+		}
 
 		// OUTPUTS:
 		// Weierstrass
